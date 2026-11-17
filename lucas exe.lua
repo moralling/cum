@@ -1,6 +1,5 @@
--- Da Hood Utility: Full Featured Script
--- UI style: Ria-like light theme, header "LUCAS.EXE"
--- Features: Hitbox, Fog, Silent Aim, Camlock, ESP, Whitelist, Speed, Keybinds
+-- Da Hood Utility: Full Featured Script (Updated)
+-- UI: pastel Ria-like theme, rounded font, fixed keybinds, working speed, whitelist player list, pastel color pickers.
 -- Requires a Roblox executor with Level 7 permissions and getrawmetatable support.
 
 local Players = game:GetService("Players")
@@ -14,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 local hitboxEnabled = false
 local hitboxSize = 20
 local hitboxTransparency = 0.5
-local hitboxColor = Color3.fromRGB(255, 0, 0)
+local hitboxColor = Color3.fromRGB(255, 182, 193) -- Pastel pink
 local TARGET_PART = "HumanoidRootPart"
 
 local silentAimEnabled = false
@@ -26,17 +25,19 @@ local silentAimKeyHeld = false
 local camlockEnabled = false
 local camlockTarget = nil
 local camlockSmoothness = 0.25
+local camlockKey = Enum.KeyCode.C
 
 local espEnabled = false
-local espColor = Color3.fromRGB(255, 0, 0)
-local espMode = "Name" -- Name, Box, Skeleton, Both
+local espColor = Color3.fromRGB(173, 216, 230) -- Pastel blue
+local espMode = "Name"
 local espDrawings = {}
 
 local whitelist = {}
-
 local speedEnabled = false
 local speedValue = 16
-local defaultWalkSpeed = 16
+local speedKey = Enum.KeyCode.X
+
+local uiToggleKey = Enum.KeyCode.RightShift
 
 local FogPresets = {
     ["Neon Red"]      = {Color = Color3.fromRGB(255, 70, 70),  Density = 0.45},
@@ -47,11 +48,12 @@ local FogPresets = {
     ["Hell Orange"]   = {Color = Color3.fromRGB(255, 140, 0),  Density = 0.43},
 }
 
--- ============ HITBOX LOGIC ============
+-- ============ HELPERS ============
 local function isWhitelisted(player)
     return whitelist[player.UserId] or whitelist[player.Name]
 end
 
+-- ============ HITBOX LOGIC ============
 local function applyHitbox(player)
     if not hitboxEnabled or player == LocalPlayer or not player.Character or isWhitelisted(player) then return end
     local part = player.Character:FindFirstChild(TARGET_PART)
@@ -66,9 +68,7 @@ end
 
 local function applyToAll()
     if not hitboxEnabled then return end
-    for _, player in ipairs(Players:GetPlayers()) do
-        applyHitbox(player)
-    end
+    for _, player in ipairs(Players:GetPlayers()) do applyHitbox(player) end
 end
 
 local function clearHitboxes()
@@ -87,26 +87,19 @@ local function clearHitboxes()
 end
 
 Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        task.wait(0.5)
-        applyHitbox(player)
-    end)
+    player.CharacterAdded:Connect(function() task.wait(0.5); applyHitbox(player) end)
 end)
 for _, player in ipairs(Players:GetPlayers()) do
     if player ~= LocalPlayer then
-        player.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            applyHitbox(player)
-        end)
+        player.CharacterAdded:Connect(function() task.wait(0.5); applyHitbox(player) end)
     end
 end
-RunService.RenderStepped:Connect(function() applyToAll() end)
+RunService.RenderStepped:Connect(applyToAll)
 
--- ============ SILENT AIM LOGIC ============
+-- ============ SILENT AIM ============
 local Camera = Workspace.CurrentCamera
 local function getClosestTargetPart(partName, fov)
-    local closest = nil
-    local shortest = fov or math.huge
+    local closest, shortest = nil, fov or math.huge
     local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and not isWhitelisted(player) then
@@ -147,11 +140,10 @@ pcall(function()
     setreadonly(mt, true)
 end)
 
--- ============ CAMLOCK LOGIC ============
+-- ============ CAMLOCK ============
 local function findClosestPlayerToCursor()
     local mousePos = UserInputService:GetMouseLocation()
-    local closest = nil
-    local shortest = math.huge
+    local closest, shortest = nil, math.huge
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and not isWhitelisted(player) then
             local head = player.Character:FindFirstChild("Head")
@@ -168,44 +160,36 @@ local function findClosestPlayerToCursor()
 end
 RunService.RenderStepped:Connect(function()
     if not camlockEnabled then return end
-    if not camlockTarget or not camlockTarget.Character then
-        camlockTarget = findClosestPlayerToCursor(); return
+    if not camlockTarget or not camlockTarget.Character or isWhitelisted(camlockTarget) then
+        camlockTarget = findClosestPlayerToCursor()
+        return
     end
-    if isWhitelisted(camlockTarget) then camlockTarget = nil; return end
     local head = camlockTarget.Character:FindFirstChild("Head")
     if not head then camlockTarget = findClosestPlayerToCursor(); return end
     local camPos = Camera.CFrame.Position
     local lookDir = (head.Position - camPos).Unit
-    local newCFrame = CFrame.new(camPos, camPos + lookDir)
-    Camera.CFrame = Camera.CFrame:Lerp(newCFrame, camlockSmoothness)
+    Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(camPos, camPos + lookDir), camlockSmoothness)
 end)
 
--- ============ SPEED LOGIC ============
+-- ============ SPEED MASTER (WORKING) ============
 RunService.RenderStepped:Connect(function()
     if speedEnabled and LocalPlayer.Character then
         local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.WalkSpeed = speedValue end
+        if hum then
+            hum.WalkSpeed = speedValue
+        end
     end
 end)
 
--- ============ ESP LOGIC ============
+-- ============ ESP ============
 local function clearESP()
     for _, d in pairs(espDrawings) do
-        if typeof(d) == "table" then
-            for _, v in pairs(d) do if v and v.Remove then v:Remove() end end
-        elseif d and d.Remove then
-            d:Remove()
-        end
+        for _, v in pairs(d) do if v and v.Remove then v:Remove() end end
     end
     espDrawings = {}
 end
 
-local function getBoxFromPart(part)
-    local pos, size = part.Position, part.Size
-    return pos, size
-end
-
-local function drawESP()
+RunService.RenderStepped:Connect(function()
     if not espEnabled then clearESP(); return end
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -216,14 +200,13 @@ local function drawESP()
                     espDrawings[player.UserId] = {
                         name = Drawing.new("Text"),
                         box = Drawing.new("Square"),
-                        line = Drawing.new("Line"),
                     }
                 end
                 local d = espDrawings[player.UserId]
                 local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
                 if onScreen and screenPos.Z > 0 then
                     local wl = isWhitelisted(player)
-                    local col = wl and Color3.fromRGB(0, 255, 0) or espColor
+                    local col = wl and Color3.fromRGB(200, 255, 200) or espColor
                     d.name.Visible = (espMode == "Name" or espMode == "Both")
                     d.name.Text = player.Name
                     d.name.Color = col
@@ -235,21 +218,16 @@ local function drawESP()
                     d.box.Thickness = 1
                     d.box.Position = Vector2.new(screenPos.X - 20, screenPos.Y - 30)
                     d.box.Size = Vector2.new(40, 60)
-                    d.line.Visible = (espMode == "Skeleton")
-                    d.line.Color = col
-                    d.line.Thickness = 1
-                    d.line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                    d.line.To = Vector2.new(screenPos.X, screenPos.Y)
                 else
-                    for _, v in pairs(d) do v.Visible = false end
+                    d.name.Visible = false
+                    d.box.Visible = false
                 end
             end
         end
     end
-end
-RunService.RenderStepped:Connect(drawESP)
+end)
 
--- ============ FOG LOGIC ============
+-- ============ FOG ============
 local function setFog(name)
     local preset = FogPresets[name]
     if not preset then return end
@@ -270,64 +248,67 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local BG_MAIN      = Color3.fromRGB(240, 245, 250)
+-- Pastel theme
+local BG_MAIN      = Color3.fromRGB(245, 242, 250)
 local BG_SIDEBAR   = Color3.fromRGB(255, 255, 255)
-local BG_HEADER    = Color3.fromRGB(230, 240, 250)
-local ACCENT       = Color3.fromRGB(130, 200, 250)
-local TEXT_DARK    = Color3.fromRGB(30, 40, 50)
-local LINE_CLR     = Color3.fromRGB(220, 230, 240)
+local BG_HEADER    = Color3.fromRGB(230, 225, 245)
+local ACCENT       = Color3.fromRGB(200, 190, 230)
+local TEXT_DARK    = Color3.fromRGB(60, 60, 80)
+local LINE_CLR     = Color3.fromRGB(215, 210, 230)
+local FONT         = Enum.Font.GothamRounded
 
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 660, 0, 470)
-Main.Position = UDim2.new(0.5, -330, 0.5, -235)
+Main.Size = UDim2.new(0, 660, 0, 500)
+Main.Position = UDim2.new(0.5, -330, 0.5, -250)
 Main.BackgroundColor3 = BG_MAIN
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
 local ms = Instance.new("UIStroke", Main); ms.Color = LINE_CLR; ms.Thickness = 1
 
 local Header = Instance.new("Frame", Main)
-Header.Size = UDim2.new(1, 0, 0, 40)
+Header.Size = UDim2.new(1, 0, 0, 44)
 Header.BackgroundColor3 = BG_HEADER
 Header.BorderSizePixel = 0
-Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 10)
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 16)
 
 local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(0, 300, 1, 0)
-Title.Position = UDim2.new(0, 14, 0, 0)
+Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "LUCAS.EXE"
 Title.TextColor3 = TEXT_DARK
-Title.Font = Enum.Font.GothamBold
+Title.Font = FONT
 Title.TextSize = 16
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
 local CloseBtn = Instance.new("TextButton", Header)
-CloseBtn.Size = UDim2.new(0, 28, 0, 28)
-CloseBtn.Position = UDim2.new(1, -36, 0, 6)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 120, 120)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -40, 0, 7)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 180, 180)
 CloseBtn.BorderSizePixel = 0
 CloseBtn.Text = "X"
-CloseBtn.TextColor3 = Color3.new(1,1,1)
-CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = FONT
 CloseBtn.TextSize = 14
-Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 10)
 CloseBtn.MouseButton1Click:Connect(function() ScreenGui.Enabled = false end)
 
 local Sidebar = Instance.new("Frame", Main)
-Sidebar.Size = UDim2.new(0, 170, 1, -40)
-Sidebar.Position = UDim2.new(0, 0, 0, 40)
+Sidebar.Size = UDim2.new(0, 170, 1, -44)
+Sidebar.Position = UDim2.new(0, 0, 0, 44)
 Sidebar.BackgroundColor3 = BG_SIDEBAR
 Sidebar.BorderSizePixel = 0
 local sl = Instance.new("UIListLayout", Sidebar)
 sl.Padding = UDim.new(0, 6); sl.SortOrder = Enum.SortOrder.LayoutOrder
 local sp = Instance.new("UIPadding", Sidebar)
 sp.PaddingTop = UDim.new(0, 12); sp.PaddingLeft = UDim.new(0, 10); sp.PaddingRight = UDim.new(0, 10)
+Instance.new("UICorner", Sidebar).CornerRadius = UDim.new(0, 16)
 
 local Content = Instance.new("Frame", Main)
-Content.Size = UDim2.new(1, -170, 1, -40)
-Content.Position = UDim2.new(0, 170, 0, 40)
+Content.Size = UDim2.new(1, -170, 1, -44)
+Content.Position = UDim2.new(0, 170, 0, 44)
 Content.BackgroundTransparency = 1
 
 local function makePage()
@@ -350,25 +331,27 @@ local KeybindPage = makePage()
 local sidebarButtons = {}
 local function selectTab(activeBtn, page)
     for _, b in ipairs(sidebarButtons) do
-        b.BackgroundColor3 = BG_SIDEBAR; b.TextColor3 = TEXT_DARK
+        b.BackgroundColor3 = BG_SIDEBAR
+        b.TextColor3 = TEXT_DARK
     end
-    activeBtn.BackgroundColor3 = ACCENT; activeBtn.TextColor3 = Color3.new(1,1,1)
+    activeBtn.BackgroundColor3 = BG_SIDEBAR -- Keep same colour (transparent feel)
+    activeBtn.TextColor3 = TEXT_DARK
     for _, p in ipairs(Content:GetChildren()) do
         if p:IsA("Frame") then p.Visible = (p == page) end
     end
 end
 local function makeSidebarButton(name, order, page)
     local btn = Instance.new("TextButton", Sidebar)
-    btn.Size = UDim2.new(1, 0, 0, 32)
+    btn.Size = UDim2.new(1, 0, 0, 34)
     btn.BackgroundColor3 = BG_SIDEBAR
     btn.BorderSizePixel = 0
     btn.Text = "  " .. name
     btn.TextColor3 = TEXT_DARK
-    btn.Font = Enum.Font.GothamBold
+    btn.Font = FONT
     btn.TextSize = 12
     btn.TextXAlignment = Enum.TextXAlignment.Left
     btn.LayoutOrder = order
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
     btn.MouseEnter:Connect(function() btn.BackgroundColor3 = BG_MAIN end)
     btn.MouseLeave:Connect(function()
         if btn.BackgroundColor3 ~= ACCENT then btn.BackgroundColor3 = BG_SIDEBAR end
@@ -387,7 +370,7 @@ local wlTab = makeSidebarButton("Whitelist", 6, WhitelistPage)
 local speedTab = makeSidebarButton("Speed Master", 7, SpeedPage)
 local keybindTab = makeSidebarButton("Keybinds", 8, KeybindPage)
 
--- ============ ROW HELPERS ============
+-- Rows
 local function makeRow(parent, labelText, yPos, height)
     height = height or 44
     local row = Instance.new("Frame", parent)
@@ -395,14 +378,14 @@ local function makeRow(parent, labelText, yPos, height)
     row.Position = UDim2.new(0, 15, 0, yPos)
     row.BackgroundColor3 = BG_SIDEBAR
     row.BorderSizePixel = 0
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
     local lbl = Instance.new("TextLabel", row)
     lbl.Size = UDim2.new(1, -140, 1, 0)
     lbl.Position = UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = labelText
     lbl.TextColor3 = TEXT_DARK
-    lbl.Font = Enum.Font.Gotham
+    lbl.Font = FONT
     lbl.TextSize = 13
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     return row, lbl
@@ -413,19 +396,19 @@ local function makeToggle(parentRow, initial, onChange)
     local btn = Instance.new("TextButton", parentRow)
     btn.Size = UDim2.new(0, 50, 0, 26)
     btn.Position = UDim2.new(1, -62, 0.5, -13)
-    btn.BackgroundColor3 = state and ACCENT or Color3.fromRGB(220, 225, 230)
+    btn.BackgroundColor3 = state and ACCENT or Color3.fromRGB(225, 225, 235)
     btn.BorderSizePixel = 0
     btn.Text = ""
     Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
     local knob = Instance.new("Frame", btn)
     knob.Size = UDim2.new(0, 20, 0, 20)
     knob.Position = state and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
-    knob.BackgroundColor3 = Color3.new(1,1,1)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
     knob.BorderSizePixel = 0
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     btn.MouseButton1Click:Connect(function()
         state = not state
-        btn.BackgroundColor3 = state and ACCENT or Color3.fromRGB(220, 225, 230)
+        btn.BackgroundColor3 = state and ACCENT or Color3.fromRGB(225, 225, 235)
         knob:TweenPosition(state and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.15, true)
         onChange(state)
     end)
@@ -435,7 +418,7 @@ local function makeSlider(parentRow, min, max, initial, step, onChange)
     local sliderHolder = Instance.new("Frame", parentRow)
     sliderHolder.Size = UDim2.new(0, 140, 0, 24)
     sliderHolder.Position = UDim2.new(1, -160, 0.5, -12)
-    sliderHolder.BackgroundColor3 = Color3.fromRGB(220, 225, 230)
+    sliderHolder.BackgroundColor3 = Color3.fromRGB(225, 225, 235)
     sliderHolder.BorderSizePixel = 0
     Instance.new("UICorner", sliderHolder).CornerRadius = UDim.new(1, 0)
     local fill = Instance.new("Frame", sliderHolder)
@@ -446,7 +429,7 @@ local function makeSlider(parentRow, min, max, initial, step, onChange)
     local knob = Instance.new("Frame", sliderHolder)
     knob.Size = UDim2.new(0, 14, 0, 14)
     knob.Position = UDim2.new((initial - min) / (max - min), -7, 0.5, -7)
-    knob.BackgroundColor3 = Color3.new(1,1,1)
+    knob.BackgroundColor3 = Color3.new(1, 1, 1)
     knob.BorderSizePixel = 0
     Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     local valLabel = Instance.new("TextLabel", parentRow)
@@ -455,7 +438,7 @@ local function makeSlider(parentRow, min, max, initial, step, onChange)
     valLabel.BackgroundTransparency = 1
     valLabel.Text = tostring(initial)
     valLabel.TextColor3 = TEXT_DARK
-    valLabel.Font = Enum.Font.GothamBold
+    valLabel.Font = FONT
     valLabel.TextSize = 12
     local dragging = false
     local function updateFromX(mx)
@@ -482,12 +465,17 @@ local function makeColorPicker(parentRow, initial, onChange)
     btn.BackgroundColor3 = initial
     btn.BorderSizePixel = 0
     btn.Text = ""
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     btn.MouseButton1Click:Connect(function()
+        -- Pastel palette
         local palette = {
-            Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 0, 255),
-            Color3.fromRGB(255, 255, 0), Color3.fromRGB(255, 0, 255), Color3.fromRGB(0, 255, 255),
-            Color3.fromRGB(255, 255, 255),
+            Color3.fromRGB(255, 182, 193), -- Pastel Pink
+            Color3.fromRGB(173, 216, 230), -- Pastel Blue
+            Color3.fromRGB(200, 255, 200), -- Pastel Green
+            Color3.fromRGB(255, 253, 208), -- Pastel Yellow
+            Color3.fromRGB(221, 160, 221), -- Pastel Purple
+            Color3.fromRGB(255, 218, 185), -- Pastel Peach
+            Color3.fromRGB(230, 230, 250), -- Pastel Lavender
         }
         local current = btn.BackgroundColor3
         local idx = 1
@@ -502,13 +490,13 @@ local function makeDropdown(parentRow, options, initial, onChange)
     local btn = Instance.new("TextButton", parentRow)
     btn.Size = UDim2.new(0, 100, 0, 26)
     btn.Position = UDim2.new(1, -112, 0.5, -13)
-    btn.BackgroundColor3 = Color3.fromRGB(240, 245, 250)
+    btn.BackgroundColor3 = Color3.fromRGB(245, 242, 250)
     btn.BorderSizePixel = 0
     btn.Text = initial
     btn.TextColor3 = TEXT_DARK
-    btn.Font = Enum.Font.GothamBold
+    btn.Font = FONT
     btn.TextSize = 12
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
     local idx = 1
     for i, opt in ipairs(options) do if opt == initial then idx = i; break end end
     btn.MouseButton1Click:Connect(function()
@@ -519,22 +507,20 @@ local function makeDropdown(parentRow, options, initial, onChange)
     end)
 end
 
--- ============ HITBOX PAGE ============
+-- ============ PAGES ============
+-- HITBOX
 local hitRow = makeRow(HitboxPage, "Enable Hitbox Expander", 15)
 makeToggle(hitRow, false, function(s) hitboxEnabled = s; if not s then clearHitboxes() end end)
-
 local sizeRow = makeRow(HitboxPage, "Hitbox Size", 70)
 makeSlider(sizeRow, 2, 100, hitboxSize, 1, function(v) hitboxSize = v end)
-
 local transRow = makeRow(HitboxPage, "Hitbox Transparency", 125)
 makeSlider(transRow, 0, 1, hitboxTransparency, 0.05, function(v) hitboxTransparency = v end)
-
-local colorRow = makeRow(HitboxPage, "Hitbox Color", 180)
+local colorRow = makeRow(HitboxPage, "Hitbox Color (Pastel)", 180)
 makeColorPicker(colorRow, hitboxColor, function(c) hitboxColor = c end)
-
 makeRow(HitboxPage, "Target Part: " .. TARGET_PART, 235)
+makeRow(HitboxPage, "UI Toggle: " .. uiToggleKey.Name, 290)
 
--- ============ FOG PAGE ============
+-- FOG
 local fogScroll = Instance.new("ScrollingFrame", FogPage)
 fogScroll.Size = UDim2.new(1, -30, 1, -30)
 fogScroll.Position = UDim2.new(0, 15, 0, 15)
@@ -553,60 +539,53 @@ for name, preset in pairs(FogPresets) do
     btn.BackgroundColor3 = preset.Color
     btn.BorderSizePixel = 0
     btn.Text = name
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.Font = FONT
     btn.TextSize = 14
     btn.LayoutOrder = order
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
     btn.MouseButton1Click:Connect(function() setFog(name) end)
 end
 local clearBtn = Instance.new("TextButton", fogScroll)
 clearBtn.Size = UDim2.new(1, -10, 0, 36)
-clearBtn.BackgroundColor3 = Color3.fromRGB(200, 205, 215)
+clearBtn.BackgroundColor3 = Color3.fromRGB(220, 220, 230)
 clearBtn.BorderSizePixel = 0
 clearBtn.Text = "Clear Fog"
 clearBtn.TextColor3 = TEXT_DARK
-clearBtn.Font = Enum.Font.GothamBold
+clearBtn.Font = FONT
 clearBtn.TextSize = 14
 clearBtn.LayoutOrder = 999
-Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", clearBtn).CornerRadius = UDim.new(0, 10)
 clearBtn.MouseButton1Click:Connect(function() clearFog() end)
 
--- ============ SILENT AIM PAGE ============
+-- SILENT AIM
 local saToggleRow = makeRow(SilentAimPage, "Enable Silent Aim", 15)
 makeToggle(saToggleRow, false, function(s) silentAimEnabled = s end)
-
 local fovRow = makeRow(SilentAimPage, "FOV (px)", 70)
 makeSlider(fovRow, 50, 1000, silentAimFOV, 10, function(v) silentAimFOV = v end)
-
 local aimPartRow = makeRow(SilentAimPage, "Target Part", 125)
 makeDropdown(aimPartRow, {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"}, silentAimPart, function(v) silentAimPart = v end)
+makeRow(SilentAimPage, "Aim Key: " .. silentAimKey.Name, 180)
 
--- ============ CAMLOCK PAGE ============
+-- CAMLOCK
 local clToggleRow = makeRow(CamlockPage, "Enable Camlock", 15)
-makeToggle(clToggleRow, false, function(s)
-    camlockEnabled = s
-    if not s then camlockTarget = nil end
-end)
-
+makeToggle(clToggleRow, false, function(s) camlockEnabled = s; if not s then camlockTarget = nil end end)
 local smoothRow = makeRow(CamlockPage, "Camlock Smoothness", 70)
 makeSlider(smoothRow, 0.05, 1.0, camlockSmoothness, 0.05, function(v) camlockSmoothness = v end)
-
 makeRow(CamlockPage, "Target: Closest to Crosshair", 125)
+makeRow(CamlockPage, "Camlock Key: " .. camlockKey.Name, 180)
 
--- ============ ESP PAGE ============
+-- ESP
 local espToggleRow = makeRow(ESPPage, "Enable ESP", 15)
 makeToggle(espToggleRow, false, function(s) espEnabled = s; if not s then clearESP() end end)
-
-local espColorRow = makeRow(ESPPage, "ESP Color", 70)
+local espColorRow = makeRow(ESPPage, "ESP Color (Pastel)", 70)
 makeColorPicker(espColorRow, espColor, function(c) espColor = c end)
-
 local espModeRow = makeRow(ESPPage, "ESP Mode", 125)
 makeDropdown(espModeRow, {"Name", "Box", "Skeleton", "Both"}, espMode, function(v) espMode = v end)
 
--- ============ WHITELIST PAGE ============
+-- WHITELIST (shows players in server)
 local wlScroll = Instance.new("ScrollingFrame", WhitelistPage)
-wlScroll.Size = UDim2.new(1, -30, 1, -80)
+wlScroll.Size = UDim2.new(1, -30, 1, -30)
 wlScroll.Position = UDim2.new(0, 15, 0, 15)
 wlScroll.BackgroundTransparency = 1
 wlScroll.BorderSizePixel = 0
@@ -621,58 +600,63 @@ local function refreshWhitelist()
         if c:IsA("Frame") then c:Destroy() end
     end
     local o = 0
-    for id, _ in pairs(whitelist) do
-        o = o + 1
-        local row = Instance.new("Frame", wlScroll)
-        row.Size = UDim2.new(1, -10, 0, 32)
-        row.BackgroundColor3 = BG_SIDEBAR
-        row.BorderSizePixel = 0
-        row.LayoutOrder = o
-        Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-        local lbl = Instance.new("TextLabel", row)
-        lbl.Size = UDim2.new(1, -60, 1, 0)
-        lbl.Position = UDim2.new(0, 10, 0, 0)
-        lbl.BackgroundTransparency = 1
-        lbl.Text = tostring(id)
-        lbl.TextColor3 = TEXT_DARK
-        lbl.Font = Enum.Font.Gotham
-        lbl.TextSize = 12
-        lbl.TextXAlignment = Enum.TextXAlignment.Left
-        local rm = Instance.new("TextButton", row)
-        rm.Size = UDim2.new(0, 24, 0, 24)
-        rm.Position = UDim2.new(1, -30, 0.5, -12)
-        rm.BackgroundColor3 = Color3.fromRGB(255, 120, 120)
-        rm.BorderSizePixel = 0
-        rm.Text = "X"
-        rm.TextColor3 = Color3.new(1,1,1)
-        rm.Font = Enum.Font.GothamBold
-        rm.TextSize = 12
-        Instance.new("UICorner", rm).CornerRadius = UDim.new(0, 4)
-        rm.MouseButton1Click:Connect(function()
-            whitelist[id] = nil
-            refreshWhitelist()
-        end)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            o = o + 1
+            local row = Instance.new("Frame", wlScroll)
+            row.Size = UDim2.new(1, -10, 0, 32)
+            row.BackgroundColor3 = BG_SIDEBAR
+            row.BorderSizePixel = 0
+            row.LayoutOrder = o
+            Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+            local lbl = Instance.new("TextLabel", row)
+            lbl.Size = UDim2.new(1, -80, 1, 0)
+            lbl.Position = UDim2.new(0, 10, 0, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = plr.Name .. " (" .. plr.UserId .. ")"
+            lbl.TextColor3 = TEXT_DARK
+            lbl.Font = FONT
+            lbl.TextSize = 12
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+            local toggle = Instance.new("TextButton", row)
+            toggle.Size = UDim2.new(0, 60, 0, 24)
+            toggle.Position = UDim2.new(1, -70, 0.5, -12)
+            toggle.BackgroundColor3 = whitelist[plr.UserId] and Color3.fromRGB(200, 255, 200) or Color3.fromRGB(255, 200, 200)
+            toggle.BorderSizePixel = 0
+            toggle.Text = whitelist[plr.UserId] and "ON" or "OFF"
+            toggle.TextColor3 = TEXT_DARK
+            toggle.Font = FONT
+            toggle.TextSize = 12
+            Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 6)
+            toggle.MouseButton1Click:Connect(function()
+                if whitelist[plr.UserId] then
+                    whitelist[plr.UserId] = nil
+                else
+                    whitelist[plr.UserId] = true
+                end
+                refreshWhitelist()
+            end)
+        end
     end
 end
+refreshWhitelist()
+Players.PlayerAdded:Connect(function() task.wait(1); refreshWhitelist() end)
+Players.PlayerRemoving:Connect(function() task.wait(0.5); refreshWhitelist() end)
 
-local wlInput = Instance.new("TextBox", WhitelistPage)
-wlInput.Size = UDim2.new(1, -120, 0, 36)
-wlInput.Position = UDim2.new(0, 15, 1, -50)
-wlInput.BackgroundColor3 = BG_SIDEBAR
-wlInput.BorderSizePixel = 0
-wlInput.Text = ""
-wlInput.PlaceholderText = "Enter Player Name or UserId"
-wlInput.TextColor3 = TEXT_DARK
-wlInput.Font = Enum.Font.Gotham
-wlInput.TextSize = 12
-wlInput.ClearTextOnFocus = false
-Instance.new("UICorner", wlInput).CornerRadius = UDim.new(0, 6)
+-- SPEED MASTER (working)
+local speedToggleRow = makeRow(SpeedPage, "Enable Speed Master", 15)
+makeToggle(speedToggleRow, false, function(s)
+    speedEnabled = s
+    if not s and LocalPlayer.Character then
+        local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 16 end
+    end
+end)
+local speedValRow = makeRow(SpeedPage, "Speed Value", 70)
+makeSlider(speedValRow, 16, 200, speedValue, 1, function(v) speedValue = v end)
+makeRow(SpeedPage, "Speed Key: " .. speedKey.Name, 125)
 
-local wlAddBtn = Instance.new("TextButton", WhitelistPage)
-wlAddBtn.Size = UDim2.new(0, 90, 0, 36)
-wlAddBtn.Position = UDim2.new(1, -105, 1, -50)
-wlAddBtn.BackgroundColor3 = ACCENT
-wlAddBtn.BorderSizePixel = 0
-wlAddBtn.Text = "Add"
-wlAddBtn.TextColor3 = Color3.new(1,1,1)
-wlAddBtn.Font = Enum.Font.G
+-- KEYBINDS
+makeRow(KeybindPage, "UI Toggle: " .. uiToggleKey.Name, 15)
+makeRow(KeybindPage, "
