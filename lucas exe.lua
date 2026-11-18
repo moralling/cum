@@ -4,12 +4,13 @@ local Lighting = game:GetService("Lighting")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 
 local hitboxEnabled, hitboxSize, hitboxTransparency = false, 20, 0.5
 local hitboxColorName, hitboxColor = "Blue", Color3.fromRGB(173, 216, 230)
 local silentAimEnabled, silentAimKeyHeld = false, false
-local silentAimPart, silentAimFOV = "Head", 300
+local silentAimPart, silentAimFOV, silentAimColor = "Head", 300, Color3.fromRGB(255, 70, 70)
 local camlockEnabled, camlockTarget, camlockSmoothness = false, nil, 0.25
 local espEnabled, espColorName, espColor, espMode = false, "Blue", Color3.fromRGB(173, 216, 230), "Name"
 local whitelist, speedEnabled, speedValue = {}, false, 16
@@ -18,9 +19,9 @@ local hasDrawing = pcall(function() local d = Drawing.new("Text"); d:Remove() en
 
 local keys = { uiToggle = Enum.KeyCode.RightShift, silentAim = Enum.KeyCode.V, camlock = Enum.KeyCode.C, speed = Enum.KeyCode.X }
 local colorPresets = {
-    ["Red"] = Color3.fromRGB(255, 70, 70), ["Pink"] = Color3.fromRGB(255, 105, 180), ["Blue"] = Color3.fromRGB(173, 216, 230),
-    ["Cyan"] = Color3.fromRGB(0, 255, 255), ["Green"] = Color3.fromRGB(50, 255, 50), ["Purple"] = Color3.fromRGB(138, 43, 226),
-    ["Orange"] = Color3.fromRGB(255, 140, 0), ["White"] = Color3.fromRGB(255, 255, 255)
+    ["Red"] = Color3.fromRGB(255, 70, 70), ["Orange"] = Color3.fromRGB(255, 140, 0), ["Yellow"] = Color3.fromRGB(255, 255, 0),
+    ["Green"] = Color3.fromRGB(50, 255, 50), ["Cyan"] = Color3.fromRGB(0, 255, 255), ["Blue"] = Color3.fromRGB(173, 216, 230),
+    ["Purple"] = Color3.fromRGB(138, 43, 226), ["Pink"] = Color3.fromRGB(255, 105, 180), ["White"] = Color3.fromRGB(255, 255, 255)
 }
 local FogPresets = {
     ["Neon Red"] = {Color = Color3.fromRGB(255,70,70), Density = 0.45}, ["Deep Pink"] = {Color = Color3.fromRGB(255,20,147), Density = 0.48},
@@ -159,20 +160,60 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LucasEXE"; ScreenGui.ResetOnSpawn = false; ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local BG_MAIN, BG_SIDEBAR, BG_HEADER = Color3.fromRGB(220, 240, 255), Color3.fromRGB(235, 245, 255), Color3.fromRGB(190, 225, 255)
-local ACCENT, TEXT_DARK, LINE_CLR = Color3.fromRGB(160, 210, 255), Color3.fromRGB(40, 60, 80), Color3.fromRGB(180, 210, 240)
+local BG_MAIN, BG_SIDEBAR, BG_HEADER = Color3.fromRGB(240, 230, 245), Color3.fromRGB(250, 240, 250), Color3.fromRGB(220, 200, 240)
+local ACCENT, TEXT_DARK, LINE_CLR = Color3.fromRGB(230, 150, 180), Color3.fromRGB(80, 40, 70), Color3.fromRGB(210, 180, 220)
 local FONT = Enum.Font.SourceSans
 
+local LoadingBox = Instance.new("Frame", ScreenGui)
+LoadingBox.Size = UDim2.new(0, 180, 0, 50)
+LoadingBox.Position = UDim2.new(0.5, -90, 0.5, -25)
+LoadingBox.BackgroundColor3 = BG_MAIN
+LoadingBox.BorderSizePixel = 0
+LoadingBox.BackgroundTransparency = 1
+LoadingBox.ZIndex = 10
+Instance.new("UICorner", LoadingBox).CornerRadius = UDim.new(0, 12)
+
+local LoadingText = Instance.new("TextLabel", LoadingBox)
+LoadingText.Size = UDim2.new(1, 0, 1, 0)
+LoadingText.BackgroundTransparency = 1
+LoadingText.Text = "loading lucas.exe"
+LoadingText.TextColor3 = TEXT_DARK
+LoadingText.Font = FONT
+LoadingText.TextSize = 16
+LoadingText.TextTransparency = 1
+LoadingText.ZIndex = 11
+
+local dotFrame = Instance.new("Frame", LoadingBox)
+dotFrame.Size = UDim2.new(0, 40, 0, 20)
+dotFrame.Position = UDim2.new(1, -45, 0.5, -10)
+dotFrame.BackgroundTransparency = 1
+dotFrame.ZIndex = 11
+
+local dots = {}
+for i = 1, 3 do
+    local dot = Instance.new("Frame", dotFrame)
+    dot.Size = UDim2.new(0, 5, 0, 5)
+    dot.Position = UDim2.new(0, (i-1)*12, 0.5, -2.5)
+    dot.BackgroundColor3 = TEXT_DARK
+    dot.BorderSizePixel = 0
+    Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+    dot.BackgroundTransparency = 1
+    table.insert(dots, dot)
+end
+
 local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 660, 0, 520); Main.Position = UDim2.new(0.5, -330, 0.5, -260)
-Main.BackgroundColor3 = BG_MAIN; Main.BorderSizePixel = 0; Main.Active = true; Main.Draggable = true
+Main.Size = UDim2.new(0, 180, 0, 50)
+Main.Position = UDim2.new(0.5, -90, 0.5, -25)
+Main.BackgroundColor3 = BG_MAIN
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Visible = false
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 16)
 local mstr = Instance.new("UIStroke", Main); mstr.Color = LINE_CLR; mstr.Thickness = 1
-
 local Header = Instance.new("Frame", Main)
 Header.Size = UDim2.new(1, 0, 0, 44); Header.BackgroundColor3 = BG_HEADER; Header.BorderSizePixel = 0
 Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 16)
-
 local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(0, 300, 1, 0); Title.Position = UDim2.new(0, 16, 0, 0)
 Title.BackgroundTransparency = 1; Title.Text = "LUCAS.EXE"; Title.TextColor3 = TEXT_DARK; Title.Font = FONT
@@ -304,6 +345,25 @@ local function makeDropdown(row, opts, init, cb)
     end)
 end
 
+local function makeColorPalette(parent, currentColor, cb)
+    local row = Instance.new("Frame", parent)
+    row.Size = UDim2.new(1,-30,0,44); row.Position = UDim2.new(0,15,0,parent.AbsoluteSize.Y - 60)
+    row.BackgroundTransparency = 1
+    local grid = Instance.new("UIListLayout", row)
+    grid.FillDirection = Enum.FillDirection.Horizontal
+    grid.Padding = UDim.new(0, 8)
+    grid.VerticalAlignment = Enum.VerticalAlignment.Center
+    for name, color in pairs(colorPresets) do
+        local btn = Instance.new("TextButton", row)
+        btn.Size = UDim2.new(0, 28, 0, 28)
+        btn.BackgroundColor3 = color
+        btn.BorderSizePixel = 0
+        btn.Text = ""
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+        btn.MouseButton1Click:Connect(function() cb(name, color) end)
+    end
+end
+
 local function makeKeybindRow(page, labelText, keyName, yPos)
     local row = makeRow(page, labelText, yPos)
     local btn = Instance.new("TextButton", row)
@@ -319,10 +379,12 @@ local function makeKeybindRow(page, labelText, keyName, yPos)
         end)
     end)
 end
+
 makeToggle(makeRow(HitboxPage, "Enable Hitbox Expander", 15), false, function(s) hitboxEnabled = s; if not s then clearHitboxes() end end)
 makeSlider(makeRow(HitboxPage, "Hitbox Size", 70), 2, 100, hitboxSize, 1, function(v) hitboxSize = v end)
 makeSlider(makeRow(HitboxPage, "Hitbox Transparency", 125), 0, 1, hitboxTransparency, 0.05, function(v) hitboxTransparency = v end)
-makeDropdown(makeRow(HitboxPage, "Hitbox Color", 180), {"Red", "Pink", "Blue", "Cyan", "Green", "Purple", "Orange", "White"}, hitboxColorName, function(v) hitboxColorName = v; hitboxColor = colorPresets[v] end)
+makeColorPalette(HitboxPage, hitboxColor, function(name, c) hitboxColorName = name; hitboxColor = c end)
+local hbColorLabel = makeRow(HitboxPage, "Hitbox Color", 180)
 
 local fogScroll = Instance.new("ScrollingFrame", FogPage)
 fogScroll.Size = UDim2.new(1,-30,1,-30); fogScroll.Position = UDim2.new(0,15,0,15)
@@ -347,13 +409,16 @@ clearBtn.MouseButton1Click:Connect(function() resetFog() end)
 makeToggle(makeRow(SilentAimPage, "Enable Silent Aim", 15), false, function(s) silentAimEnabled = s end)
 makeSlider(makeRow(SilentAimPage, "FOV (px)", 70), 50, 1000, silentAimFOV, 10, function(v) silentAimFOV = v end)
 makeDropdown(makeRow(SilentAimPage, "Target Part", 125), {"Head","HumanoidRootPart","UpperTorso","LowerTorso"}, silentAimPart, function(v) silentAimPart = v end)
+makeColorPalette(SilentAimPage, silentAimColor, function(name, c) silentAimColor = c end)
+local saColorLabel = makeRow(SilentAimPage, "FOV Color", 180)
 
 makeToggle(makeRow(CamlockPage, "Enable Camlock", 15), false, function(s) camlockEnabled = s; if not s then camlockTarget = nil end end)
 makeSlider(makeRow(CamlockPage, "Camlock Smoothness", 70), 0.05, 1.0, camlockSmoothness, 0.05, function(v) camlockSmoothness = v end)
 
 makeToggle(makeRow(ESPPage, "Enable ESP", 15), false, function(s) espEnabled = s; if not s then clearESP() end end)
-makeDropdown(makeRow(ESPPage, "ESP Color", 70), {"Red", "Pink", "Blue", "Cyan", "Green", "Purple", "Orange", "White"}, espColorName, function(v) espColorName = v; espColor = colorPresets[v] end)
 makeDropdown(makeRow(ESPPage, "ESP Mode", 125), {"Name","Box","Skeleton","Both"}, espMode, function(v) espMode = v end)
+makeColorPalette(ESPPage, espColor, function(name, c) espColorName = name; espColor = c end)
+local espColorLabel = makeRow(ESPPage, "ESP Color", 70)
 
 local wlScroll = Instance.new("ScrollingFrame", WhitelistPage)
 wlScroll.Size = UDim2.new(1,-30,1,-30); wlScroll.Position = UDim2.new(0,15,0,15)
@@ -409,39 +474,4 @@ pcall(function() for _, f in ipairs(listfiles(".")) do if f:match("LucasEXE_") a
 
 local nameBox = Instance.new("TextBox", ConfigPage)
 nameBox.Size = UDim2.new(0, 200, 0, 30); nameBox.Position = UDim2.new(0.5, -100, 0, 15)
-nameBox.BackgroundColor3 = Color3.fromRGB(240, 250, 255); nameBox.BorderSizePixel = 0
-nameBox.Text = "Default"; nameBox.PlaceholderText = "Config Name"
-nameBox.TextColor3 = TEXT_DARK; nameBox.Font = FONT; nameBox.TextSize = 14
-Instance.new("UICorner", nameBox).CornerRadius = UDim.new(0,8)
-
-local saveBtn = Instance.new("TextButton", ConfigPage)
-saveBtn.Size = UDim2.new(0, 200, 0, 35); saveBtn.Position = UDim2.new(0.5, -100, 0, 55)
-saveBtn.BackgroundColor3 = ACCENT; saveBtn.BorderSizePixel = 0
-saveBtn.Text = "Save Config"; saveBtn.TextColor3 = TEXT_DARK; saveBtn.Font = FONT; saveBtn.TextSize = 14
-Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0,8)
-
-local loadDropdown = Instance.new("TextButton", ConfigPage)
-loadDropdown.Size = UDim2.new(0, 200, 0, 35); loadDropdown.Position = UDim2.new(0.5, -100, 0, 110)
-loadDropdown.BackgroundColor3 = Color3.fromRGB(240, 250, 255); loadDropdown.BorderSizePixel = 0
-loadDropdown.Text = "Load: Default"; loadDropdown.TextColor3 = TEXT_DARK; loadDropdown.Font = FONT; loadDropdown.TextSize = 14
-Instance.new("UICorner", loadDropdown).CornerRadius = UDim.new(0,8)
-
-local loadBtn = Instance.new("TextButton", ConfigPage)
-loadBtn.Size = UDim2.new(0, 200, 0, 35); loadBtn.Position = UDim2.new(0.5, -100, 0, 155)
-loadBtn.BackgroundColor3 = ACCENT; loadBtn.BorderSizePixel = 0
-loadBtn.Text = "Apply Loaded Config"; loadBtn.TextColor3 = TEXT_DARK; loadBtn.Font = FONT; loadBtn.TextSize = 14
-Instance.new("UICorner", loadBtn).CornerRadius = UDim.new(0,8)
-
-local dropIdx = 1
-loadDropdown.MouseButton1Click:Connect(function()
-    dropIdx = dropIdx + 1; if dropIdx > #configList then dropIdx = 1 end
-    activeConfig = configList[dropIdx]; loadDropdown.Text = "Load: " .. activeConfig
-end)
-
-saveBtn.MouseButton1Click:Connect(function()
-    local cName = nameBox.Text ~= "" and nameBox.Text or "Default"
-    local data = {hitbox = {size = hitboxSize, trans = hitboxTransparency, col = hitboxColorName}, esp = {col = espColorName, mode = espMode}, silent = {fov = silentAimFOV, part = silentAimPart}, cam = {smooth = camlockSmoothness}, speed = {val = speedValue}, binds = {ui = keys.uiToggle.Name, aim = keys.silentAim.Name, cam = keys.camlock.Name, spd = keys.speed.Name}}
-    if writefile then writefile("LucasEXE_" .. cName .. ".json", HttpService:JSONEncode(data)); saveBtn.Text = "Saved!"; task.wait(1); saveBtn.Text = "Save Config"
-        if not table.find(configList, cName) then table.insert(configList, cName) end
-    end
-end)
+nameBox.BackgroundColor3 = Color3.fromRGB(240, 250, 255);
